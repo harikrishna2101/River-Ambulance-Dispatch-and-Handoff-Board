@@ -1,0 +1,389 @@
+RIVER AMBULANCE DISPATCH & HANDOFF BOARD
+Recommended Technology Stack & Prototype Architecture
+Build-ready technical specification for a fast, low-bandwidth public prototype
+Decision
+Recommendation
+Why it fits this prototype
+Frontend
+React + TypeScript + Vite
+Fast mobile UI, simple component model, easy Antigravity scaffolding.
+UI
+Tailwind CSS + shadcn/ui + Lucide icons
+Consistent operational dashboard without a heavy design system.
+Backend / DB
+Supabase Postgres + RLS + RPC
+Single managed backend; atomic job claiming and realtime DB changes.
+Realtime
+Supabase Realtime (Postgres Changes)
+Boat availability and dispatch status update without polling.
+Hosting
+Cloudflare Pages
+Free static hosting path with strong CDN delivery for low-bandwidth clients.
+Offline / Cache
+PWA service worker + IndexedDB
+Caches shell and last-known board data; keeps the UI usable during weak connectivity.
+Architecture principle: keep the prototype to one browser app plus one managed database/realtime service. Avoid a separate Node/Express API unless a later production requirement demands it. This reduces deployment points of failure and makes the dispatch workflow easier to test.
+1. Product and Technical Goals
+The system is an emergency dispatch board for five boat ambulances serving small river islands. The prototype must let a health worker submit an emergency request in seconds, let a captain claim it without double-booking, and let the next shift see fuel and oxygen status immediately.
+Primary success criteria
+Emergency request can be logged in under 30 seconds on a phone.
+Captain can see open requests sorted by urgency and claim a job in one clear action.
+Two captains cannot successfully claim the same request.
+Boat board exposes availability, fuel percentage, oxygen tank count, and current dispatch state at a glance.
+Historical dispatch can be filtered by island without a complex reporting page.
+Core UI remains functional on a slow mobile connection and small screen.
+2. Recommended Architecture
+PHONE / LOW-BANDWIDTH BROWSER        │        ▼React + TypeScript + Vite + Tailwind + shadcn/ui        │        │ HTTPS / Supabase JS        ▼Supabase  ├── Postgres (dispatch, boats, handoffs, audit log)  ├── Row Level Security  ├── RPC: claim_dispatch()  ← atomic concurrency control  ├── Realtime: Postgres Changes  └── Edge Functions (optional, only if a server-side task is needed)        │        ▼Cloudflare Pages CDN / static hosting
+The browser reads the operational board directly from Supabase through the official JavaScript client. Mutations that require business rules should use Postgres RPC functions rather than trusting client-side checks. Realtime subscriptions refresh the boat board and dispatch list when rows change.
+3. Technology Stack
+Layer
+Technology
+Prototype use
+Reason / trade-off
+Language
+TypeScript
+All frontend code
+Type safety for dispatch and status enums; easier maintenance than plain JS.
+Framework
+React 18+
+Screens, forms, boards
+Small ecosystem and fast iteration.
+Build
+Vite
+Dev server and production bundle
+Low configuration and small frontend footprint.
+Styling
+Tailwind CSS
+Responsive layout
+Fast mobile-first styling with minimal custom CSS.
+Components
+shadcn/ui
+Buttons, dialogs, sheets, inputs, badges
+Accessible primitives that remain easy to customize.
+Icons
+Lucide React
+Status/operational icons
+Lightweight and consistent visual language.
+Data client
+@supabase/supabase-js
+Reads, writes, realtime
+Direct integration with Postgres, Auth and Realtime.
+Database
+PostgreSQL via Supabase
+System of record
+Relational constraints and transactions fit dispatch state transitions.
+Realtime
+Supabase Realtime
+Live dispatch + boat board
+Pushes DB changes to connected devices; no polling loop.
+Client cache
+IndexedDB
+Last-known boats/requests
+Better resilience on flaky mobile connections.
+PWA
+vite-plugin-pwa
+Installable/offline shell
+Useful for repeat use on shared phones.
+Hosting
+Cloudflare Pages
+Public web URL
+Static asset delivery via CDN; suitable for low-bandwidth clients.
+Testing
+Vitest + React Testing Library
+Unit/component tests
+Fast validation of status transitions and forms.
+E2E
+Playwright
+Dispatch workflow test
+Verify create → claim → complete and race-condition handling.
+Version control
+GitHub
+Public source repository
+Simple submission and review workflow.
+4. Why This Stack Fits the Challenge
+4.1 Speed and simplicity
+The operational UI is essentially a structured CRUD workflow with realtime status. A separate REST backend would add another deployment and another failure point without materially improving the prototype. Supabase lets the application keep the database transaction boundary close to the core dispatch rules.
+4.2 Free public deployment path
+As of 17 September 2026, Supabase lists a $0 Free plan with Postgres, 500 MB database size, 1 GB file storage, and Postgres Changes Realtime with 2 million messages/month and 200 peak concurrent connections. Cloudflare Pages documents a Free plan with static asset delivery free and unlimited, up to 500 builds/month and up to 20,000 files per site. These limits are far above what this five-boat prototype needs. 
+Important deployment note: the prototype should remain small enough that it does not depend on paid add-ons, custom domains, large file uploads, or heavy server-side functions. Supabase projects on the Free plan can pause after inactivity, so the demo should be opened and tested before submission. 
+4.3 Low-bandwidth behavior
+No large hero images, video, maps, or decorative animations.
+Prefer system fonts and SVG/Lucide icons; avoid downloading icon font packs.
+Load current board data with one compact query per screen; do not refetch unchanged rows every few seconds.
+Use realtime events to invalidate/update only affected records.
+Cache the application shell and last-known board state in IndexedDB.
+5. Domain Model / Database Schema
+Table
+Key fields
+Purpose
+boats
+id, boat_code, name, status, fuel_pct, oxygen_tanks, last_handoff_at
+Exactly five ambulance boats and current operational state.
+dispatches
+id, island, pickup_location, urgency, patient_condition, status, boat_id, created_at, claimed_at, completed_at
+Emergency request and lifecycle.
+handoffs
+id, boat_id, shift_label, fuel_pct, oxygen_tanks, notes, recorded_at
+Shift-change record for supplies and operational notes.
+users_demo
+id, display_name, role, island
+Lightweight demo identity if role tracking is used.
+audit_events
+id, entity_type, entity_id, action, actor_label, metadata, created_at
+Traceable record of important mutations for judging and debugging.
+Recommended enums
+boat_status   = AVAILABLE | ON_MISSION | MAINTENANCEdispatch_status = OPEN | CLAIMED | COMPLETED | CANCELLEDurgency       = CRITICAL | HIGH | ROUTINErole          = HEALTH_WORKER | CAPTAIN | SUPERVISOR
+Database constraints
+fuel_pct must be between 0 and 100.
+oxygen_tanks must be an integer >= 0.
+boat_code must be unique and pre-seeded with BOAT-01 through BOAT-05.
+A dispatch may reference at most one boat at a time.
+A boat with status ON_MISSION should normally have one CLAIMED dispatch; enforce this in the claim function rather than only in the UI.
+Every claim, completion and handoff writes an audit event.
+6. Core Screens
+Screen
+Primary user
+Key UI elements
+Critical behavior
+Dispatch Request
+Health worker
+Island selector, pickup location, urgency chips, patient condition, Submit
+Minimal typing; validation; instant success confirmation.
+Live Board
+Both roles
+Five boat cards, open request queue, status pills, fuel and oxygen
+Realtime updates; high-urgency items are visually prominent.
+Captain Queue
+Captain
+Open requests, urgency, island, pickup, age, Claim button
+Claim action calls atomic RPC and handles conflict cleanly.
+Active Mission
+Captain
+Patient/route summary, mission timer, Complete button
+Only assigned captain sees completion action.
+Shift Handoff
+Captain/Supervisor
+Boat selector, fuel %, oxygen tanks, notes
+Saves a timestamped handoff record and updates the boat snapshot.
+Dispatch History
+Supervisor / demo reviewer
+Island filter, date filter, status, result table
+Fast review by island; newest records first.
+Operational board card
+[ BOAT-03   AVAILABLE ]Fuel      78%  ████████░░Oxygen     4 tanksCurrent   No active missionUpdated   2 min ago[ View details ]
+7. Critical Workflow: Emergency Request
+Health worker opens the Dispatch Request screen.
+Selects island and enters pickup location; urgency and patient condition are required.
+Client performs lightweight validation, then inserts the dispatch as OPEN.
+Realtime event updates all connected captain boards.
+The new request appears sorted by urgency, then created_at ascending.
+Health worker sees a compact confirmation with the request ID.
+Critical Workflow: Captain Claim
+Captain opens the queue and taps Claim.
+Client calls Postgres RPC claim_dispatch(dispatch_id, captain_id).
+Database transaction checks that the dispatch is still OPEN and assigns the selected boat/captain.
+If another captain won the race, the RPC returns a conflict status; the UI shows “Already claimed” and refreshes the row.
+Successful claim changes dispatch to CLAIMED and boat status to ON_MISSION in the same transaction.
+Realtime events update the board for every connected user.
+Critical Workflow: Completion
+Assigned captain opens Active Mission and presses Complete.
+RPC validates that the dispatch is CLAIMED and assigned to the same captain/demo identity.
+Dispatch becomes COMPLETED; completed_at is recorded; boat returns to AVAILABLE.
+Audit event is appended and the board updates in realtime.
+8. Concurrency and Edge-Case Design
+Edge case
+Expected behavior
+Implementation
+Two captains claim simultaneously
+Only one succeeds; second receives conflict message.
+Atomic Postgres RPC with conditional UPDATE / transaction.
+Boat already on mission
+Boat cannot be assigned to a second dispatch.
+RPC verifies boat status inside the transaction.
+No boats available
+Request still becomes OPEN; queue stays visible.
+Do not auto-cancel; display “Waiting for boat”.
+Poor connection during submit
+Prevent duplicate taps and retry safely.
+Client generates idempotency key/request UUID and disables submit during write.
+Captain disconnects after claim
+Job remains CLAIMED and visible to the board.
+Assignment state is stored server-side; presence is informational only.
+Handoff entered with bad fuel value
+Save is rejected with inline validation.
+DB CHECK constraint plus client validation.
+Oxygen reaches zero
+Boat card shows a prominent supply warning.
+Derived warning badge from oxygen_tanks = 0.
+Completed job edited later
+Do not allow silent mutation.
+History is immutable except supervisor correction path, logged in audit_events.
+Realtime channel fails
+Board still shows last-known state and retry status.
+IndexedDB cache + reconnect/subscription recovery.
+9. Atomic Claim Function (Core Reliability Rule)
+This function is the most important piece of backend logic. The UI must never rely on “check status, then update” as two independent requests because that creates a race condition.
+-- Conceptual SQL / PLpgSQLBEGIN  UPDATE dispatches     SET status = 'CLAIMED',         boat_id = p_boat_id,         claimed_by = p_captain_id,         claimed_at = now()   WHERE id = p_dispatch_id     AND status = 'OPEN'     AND EXISTS (       SELECT 1 FROM boats       WHERE id = p_boat_id         AND status = 'AVAILABLE'     );  -- If zero rows changed, return a conflict.  -- If one row changed, set the boat to ON_MISSION  -- and write an audit event in the same transaction.END;
+For this challenge, the exact SQL can be implemented as a Supabase Postgres function. The important invariant is that dispatch status, boat status, and audit logging are committed together.
+10. Frontend Structure
+src/  app/    App.tsx    routes.tsx  components/    BoatCard.tsx    DispatchCard.tsx    StatusBadge.tsx    OfflineBanner.tsx    EmptyState.tsx  features/    dispatch/      dispatchApi.ts      dispatchTypes.ts      DispatchForm.tsx      DispatchQueue.tsx    boats/      boatsApi.ts      BoatBoard.tsx      HandoffForm.tsx    history/      HistoryFilters.tsx      HistoryTable.tsx  lib/    supabase.ts    realtime.ts    offlineStore.ts  styles/    index.css
+State management strategy
+Server state: Supabase queries/subscriptions; keep it close to feature modules.
+Transient UI state: React state for forms, dialogs, filters and loading indicators.
+Local persistence: IndexedDB stores the last successful board snapshot and static reference data.
+Do not introduce Redux unless the prototype grows enough to justify global state complexity.
+11. Realtime Strategy
+Subscribe only to the tables needed for the current screen. For example, the Live Board listens to boats and dispatches; the Handoff screen mainly needs the selected boat. Realtime events should trigger targeted cache updates rather than full-page reloads.
+supabase  .channel('operations-board')  .on('postgres_changes', { event: '*', schema: 'public', table: 'boats' }, onBoatChange)  .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatches' }, onDispatchChange)  .subscribe()
+Supabase documents Postgres Changes as a realtime mechanism for listening to inserts, updates and deletes. Its current Free plan lists 2 million Realtime messages per month and 200 peak concurrent connections. 
+12. Low-Bandwidth UX Rules
+Rule
+Implementation target
+First meaningful screen
+Render app shell and cached board first; then reconcile with server.
+Payload size
+Request only visible columns; avoid SELECT *.
+Images
+None required for core flow; use SVG icons only.
+Polling
+No fixed 5-second polling loop; use realtime with reconnect fallback.
+Forms
+One-column mobile forms; large tap targets; numeric inputs for fuel/oxygen.
+Feedback
+Show immediate local loading state and a clear online/offline indicator.
+Failure
+Never blank the whole screen because one request failed; keep last-known data visible with a warning.
+13. Security and Access Model
+The challenge explicitly avoids a complex login flow, so the prototype should use a lightweight demo identity model while still demonstrating correct database authorization boundaries.
+Recommended prototype model
+On first load, present a “Continue as Health Worker” / “Continue as Captain” role selector.
+Generate a temporary anonymous Supabase identity or lightweight session token.
+Store the selected display role in session state; never store secrets in localStorage.
+Use RLS policies to protect tables from unrestricted direct access where practical.
+Keep privileged state changes inside RPC functions so the client cannot arbitrarily set CLAIMED/COMPLETED status.
+For a real clinical deployment, this demo access model would not be sufficient. Production would require stronger identity verification, least-privilege roles, audit retention, privacy controls, and formal operational/security review. Those are deliberately outside the hackathon prototype scope.
+14. Deployment Plan
+Step
+Action
+Output
+1
+Create Supabase project
+Project URL + anon key.
+2
+Run schema SQL
+Tables, constraints, RLS policies and RPC functions.
+3
+Seed boats
+BOAT-01 through BOAT-05 with realistic demo fuel/oxygen values.
+4
+Build frontend
+Vite production bundle with environment variables.
+5
+Connect Realtime
+Enable Postgres changes for boats and dispatches.
+6
+Deploy to Cloudflare Pages
+Public HTTPS URL from GitHub repository.
+7
+Run E2E smoke test
+Create request → claim on captain view → complete → verify board/history.
+8
+Publish README
+Architecture, demo roles, seed/reset instructions, live URL.
+Cloudflare Pages currently documents a Free plan supporting up to 500 builds/month and up to 20,000 files per site, while static asset requests are free and unlimited. 
+15. Testing Plan
+Test level
+Cases
+Unit
+Urgency sorting; fuel validation; oxygen warning thresholds; status badge mapping.
+Component
+Dispatch form validation; captain claim button states; handoff form; history filter.
+Database
+Fuel/oxygen checks; unique boat codes; status transition constraints; RPC claim behavior.
+Concurrency
+Two browser contexts click Claim at the same time; assert exactly one successful assignment.
+Offline / recovery
+Disable network after initial load; verify cached board; reconnect and reconcile updates.
+Mobile smoke
+390×844 viewport; create request in <=30 sec; no horizontal overflow.
+16. Observability for a Prototype
+Audit table is the primary business trace: who/what/when for claims, completions and handoffs.
+Show a small “Last updated” timestamp on the board.
+Show connectivity state and last successful sync time.
+Use browser console only during development; keep the production UI free of noisy logs.
+17. Trade-offs
+Decision
+Chosen approach
+Trade-off accepted
+Backend
+Supabase instead of custom Node API
+Less backend control, but much faster and fewer deployment components.
+Auth
+Lightweight demo identity
+Less secure than production auth, but meets the no-complex-login requirement.
+Realtime
+Postgres Changes
+Simpler than introducing WebSockets infrastructure; enough for five boats.
+Offline
+Cache + read resilience, not full offline dispatch
+Avoids dangerous conflict semantics when multiple clients are offline simultaneously.
+Maps
+No map in core flow
+Avoids external API limits and heavy payloads; island/pickup is text-based.
+Attachments
+No photos/files
+Reduces bandwidth and avoids storage complexity.
+18. Prototype Data Seed
+Boat
+Initial status
+Fuel
+Oxygen
+Demo note
+BOAT-01
+AVAILABLE
+86%
+5
+Primary island shuttle
+BOAT-02
+AVAILABLE
+64%
+3
+Needs next-shift check
+BOAT-03
+ON_MISSION
+72%
+4
+Demo active mission
+BOAT-04
+AVAILABLE
+91%
+6
+Fully stocked
+BOAT-05
+MAINTENANCE
+18%
+1
+Out of service for prototype demo
+These are seed/demo values only. The application should make them editable through the handoff flow, and the UI should clearly distinguish live data from seeded sample state.
+19. Antigravity Build Prompt
+Use the following prompt as the implementation brief inside Antigravity. It intentionally specifies the technology and acceptance behavior rather than prescribing every visual detail.
+Build a production-style web prototype called “River Ambulance Dispatch & Handoff Board”.STACK- React + TypeScript + Vite- Tailwind CSS + shadcn/ui + Lucide icons- Supabase Postgres + RLS + RPC + Realtime- PWA service worker and IndexedDB cache- Vitest + React Testing Library + Playwright- Deploy frontend to Cloudflare PagesCORE FEATURES1. Health Worker: create emergency dispatch with island, pickup location, urgency and patient condition.2. Captain: view OPEN requests, claim a request, open active mission, complete it.3. Handoff: record fuel percentage, oxygen tank count and notes for each of five boats.4. Live Board: show all five boats with AVAILABLE / ON MISSION / MAINTENANCE, fuel and oxygen.5. History: filter completed/cancelled dispatches by island.RELIABILITY- Implement claim_dispatch() as a Postgres transaction/RPC.- Two captains clicking Claim simultaneously must yield exactly one winner.- The losing client must receive a conflict response and refresh the request.- Boat status and dispatch status must change atomically.- Write audit_events for claim, complete and handoff actions.UX- Mobile-first, designed for 390px wide screens.- No large images, maps or animations.- Large tap targets, obvious urgency chips, clear status badges.- Critical requests appear first.- Show connection state and last-sync time.- Cache the shell and last-known board state; do not pretend dispatch can be safely completed while fully offline.DATASeed exactly five boats: BOAT-01 through BOAT-05.Use UUID primary keys and timestamps.Validate fuel 0–100 and oxygen >= 0.DEMO ACCESS- Avoid a complex sign-in flow.- Provide a simple role selector for Health Worker / Captain / Supervisor demo mode.- Keep the security limitations documented in README.DELIVERABLES- Working public web app- Public GitHub repository- README with architecture, local setup, environment variables, database SQL, demo credentials/mode and testing steps- Automated test for the double-claim race condition- Reset/seed script for demo data
+20. Acceptance Checklist
+A public URL opens on a phone without login complexity.
+A health worker can submit a complete dispatch request.
+A captain sees the request appear without a manual page refresh.
+Only one of two concurrent claim attempts succeeds.
+A claimed boat changes to ON MISSION on every connected board.
+Completion returns the boat to AVAILABLE and records the time.
+Handoff updates fuel and oxygen for the selected boat and creates a history record.
+History filters by island and remains readable on mobile.
+The interface handles temporary connection loss without clearing the last-known state.
+The repository contains setup instructions and the submission note can explain the key trade-offs.
+References / Current Service Limits
+Service limits and plan statements below were checked on 17 September 2026 and should be re-checked immediately before deployment because vendor plans can change.
+Supabase Pricing: https://supabase.com/pricing
+Supabase Realtime Limits: https://supabase.com/docs/guides/realtime/limits
+Supabase Realtime Guide: https://supabase.com/docs/guides/realtime
+Cloudflare Pages Limits: https://developers.cloudflare.com/pages/platform/limits/
+Cloudflare Pages Functions Pricing: https://developers.cloudflare.com/pages/functions/pricing/
+Vercel pricing was also reviewed as an alternative; Hobby is listed at $0/month, but its terms restrict Hobby usage to personal/non-commercial use, so this document prefers Cloudflare Pages for the public prototype path: https://vercel.com/pricing and https://vercel.com/legal/terms

@@ -1,0 +1,353 @@
+PRODUCT REQUIREMENTS DOCUMENT
+River Ambulance Dispatch & Handoff Board
+Build-ready PRD for Antigravity
+Prepared for JALAKAM HARIKRISHNA  |  Challenge deadline: 18 September 2026, 12:33 PM IST
+Product goal: replace emergency dispatch and shift-handoff group chats with a fast, mobile-first board that makes every request, claim, completion, fuel level, and oxygen count visible and auditable.
+1. Executive Summary
+Small river islands operate five boat ambulances. Emergency requests and shift changes are currently coordinated through unstructured group chats, making it easy to miss urgent cases, lose fuel/oxygen information, and create duplicate work. The proposed web app is a lightweight dispatch and operational status board designed for clinic workers and boat captains on low-bandwidth mobile connections.
+The MVP should prioritize speed over feature breadth: a clinic worker creates a request in under 30 seconds; captains see open requests immediately, claim a job with conflict protection, and mark it completed; every boat displays current availability plus fuel and oxygen; and past dispatches can be filtered by island.
+2. Product Objectives & Success Measures
+Objective
+Target / Measure
+Fast emergency logging
+Median request creation time <= 30 seconds on mobile.
+Clear dispatch queue
+Urgent open requests are visually prioritized and remain visible until claimed/completed.
+Safe job claiming
+A job can have only one active captain. Simultaneous claims result in exactly one winner.
+Shift readiness
+For all five boats, fuel %, oxygen tank count, availability, and latest handoff note are visible from one board.
+Operational history
+Dispatch history can be filtered by island and sorted newest-first.
+Low-bandwidth usability
+Core pages load with minimal JavaScript, compressed assets, and no heavy media; app remains usable on slow mobile networks.
+Public access
+No complex account setup; app is usable by a small operational team through role selection / simple identity entry.
+3. Users & Roles
+Role
+Primary jobs
+Needs
+Health Worker / Dispatcher
+Create requests; view status; optionally cancel incorrect requests.
+Extremely fast form, clear urgency, island/location fields, confirmation that request entered queue.
+Boat Captain
+View open jobs; claim; update status; complete; record handoff information.
+Large touch targets, minimal typing, immediate feedback on conflicts, current boat status.
+Shift Lead / Operations
+Review all five boats; verify handoffs; inspect history.
+One-screen operational board, fuel/oxygen visibility, timestamps, historical filtering.
+System / Demo Admin
+Seed boats and sample data for prototype.
+Simple local configuration; no complex user management in MVP.
+4. MVP Scope
+In scope
+Five predefined boats with persistent IDs and display names (Boat 1 through Boat 5).
+Emergency request creation with pickup island/location, urgency, patient condition, requester name/contact label, and timestamp.
+Open-request queue with urgency-first ordering and request age.
+Captain job claiming with atomic conflict protection.
+Job lifecycle: Open -> Claimed -> In Transit -> Completed. (Allow Open -> Cancelled for incorrect requests.)
+Boat status board showing Available, Assigned, In Transit, Maintenance/Unavailable, plus fuel % and oxygen tank count.
+Shift handoff form per boat with fuel percentage, oxygen tanks available, notes, and handoff timestamp.
+Dispatch history with island filter and date/time information.
+Basic offline/error states and retry messaging for weak connectivity.
+Public deployment using a free hosting/database option.
+Out of scope for MVP
+GPS tracking or live vessel location.
+Payments, billing, or insurance workflows.
+Complex identity management, SSO, password reset, or role administration.
+Automated medical triage or clinical decision support.
+Push/SMS/WhatsApp notifications requiring paid services.
+Hardware integration for fuel or oxygen sensors.
+5. Core User Flows
+Flow A - Create emergency request
+Health worker opens Dispatch screen.
+Taps “New Emergency Request”.
+Selects pickup island/location.
+Selects urgency: Critical / High / Routine.
+Selects patient condition: Critical, Serious, Stable, Unknown.
+Optionally adds short notes.
+Submits request.
+System creates request with status Open and current timestamp, then returns a prominent success state with request ID and queue position.
+Flow B - Captain claims and completes a job
+Captain opens “Open Requests”.
+Sees requests sorted by urgency and age.
+Opens a request and taps “Claim Job”.
+Server rechecks current request status before assigning captain/boat.
+If still Open, request becomes Claimed and selected boat becomes Assigned.
+Captain can mark In Transit when departing.
+After handoff at destination, captain taps “Complete”.
+System records completion timestamp and returns boat to Available.
+Flow C - Shift handoff
+Captain/shift lead opens boat card.
+Taps “Handoff”.
+Enters fuel % and oxygen tank count; optionally adds note.
+Submits.
+System records an append-only handoff record and updates the boat’s current operational snapshot.
+The board shows the latest handoff timestamp so the next shift can verify freshness.
+6. Information Architecture / Screens
+Screen
+Purpose
+Key UI elements
+Operations Board
+Single source of truth.
+Five boat cards; open emergency count; quick status filters; fuel and oxygen indicators; last handoff time.
+New Request
+Fast request entry.
+Island dropdown; urgency segmented control; patient condition; notes; submit CTA.
+Open Requests
+Captain dispatch queue.
+Request cards with urgency, island, condition, age, status, and claim CTA.
+Request Detail
+Dispatch action.
+Full request details; current status; claim/in-transit/complete buttons; event timeline.
+Boat Detail / Handoff
+Manage boat readiness.
+Current status, fuel %, oxygen tanks, latest handoff, handoff form, recent dispatches.
+Dispatch History
+Review prior transport records.
+Island filter, date range optional, status, request/boat details, completion time.
+7. Detailed Functional Requirements
+7.1 Emergency Requests
+ID
+Requirement
+Acceptance detail
+REQ-01
+Create request
+System must save pickup location, urgency, patient condition, notes, requester, created_at, status=OPEN.
+REQ-02
+Required fields
+Pickup location, urgency, and patient condition are required.
+REQ-03
+Urgency order
+Critical > High > Routine.
+REQ-04
+Open queue
+Open requests remain visible until claimed or cancelled.
+REQ-05
+Timestamp
+Display relative age (e.g., 4 min ago) plus exact timestamp in detail.
+REQ-06
+Confirmation
+On successful submit, show request ID and created time.
+REQ-07
+Validation
+Prevent submission if required fields are missing; tolerate short intermittent connectivity with a clear retry path.
+7.2 Dispatch / Claiming
+ID
+Requirement
+Acceptance detail
+DIS-01
+View open requests
+Captain can see all open requests and filter by urgency.
+DIS-02
+Claim atomically
+Only one captain can successfully claim a given open request.
+DIS-03
+Conflict feedback
+Losing captain sees “Already claimed by another captain” and the request refreshes.
+DIS-04
+Boat assignment
+Claiming assigns the captain and one available boat.
+DIS-05
+No-boat guardrail
+System prevents claiming when no boat is available unless an operations override is explicitly implemented.
+DIS-06
+Lifecycle
+Claimed -> In Transit -> Completed; completion frees the boat.
+DIS-07
+Audit trail
+Each state change records actor, timestamp, and previous/new status.
+7.3 Boat Readiness & Handoff
+ID
+Requirement
+Acceptance detail
+BOAT-01
+Five boats
+Seed exactly five boat records for MVP demo.
+BOAT-02
+Status
+Allowed: Available, Assigned, In Transit, Maintenance.
+BOAT-03
+Fuel
+Store integer/decimal 0-100%; display as percentage and visual level.
+BOAT-04
+Oxygen
+Store whole-number available tank count; prevent negative values.
+BOAT-05
+Handoff history
+Every handoff is append-only and timestamped.
+BOAT-06
+Stale handoff indicator
+Display last handoff time and visually flag stale records based on a configurable threshold (e.g., 8 hours).
+7.4 History
+ID
+Requirement
+Acceptance detail
+HIS-01
+Filter by island
+Quick-select island filter; update results immediately.
+HIS-02
+Sort
+Newest completed/created first.
+HIS-03
+Auditability
+Show request ID, island, urgency, boat, captain label, created, claimed, in-transit, completed.
+8. Recommended Data Model
+Entity
+Fields
+boats
+id, name, status, fuel_pct, oxygen_tanks, updated_at
+dispatch_requests
+id, pickup_island, pickup_location, urgency, patient_condition, notes, requester_name, status, boat_id, captain_name, created_at, claimed_at, in_transit_at, completed_at, cancelled_at
+handoffs
+id, boat_id, fuel_pct, oxygen_tanks, notes, handed_over_by, created_at
+dispatch_events
+id, request_id, event_type, actor_name, metadata, created_at
+Implementation note: For the prototype, use a small hosted relational database or a free backend with transactional updates. The critical integrity rule is that claiming must be performed by the backend/database, not only in client-side JavaScript.
+9. State Machines & Business Rules
+Dispatch request states
+OPEN -> CLAIMED -> IN_TRANSIT -> COMPLETED
+OPEN -> CANCELLED
+Optional recovery path: CLAIMED -> OPEN only through an explicit “Release job” action by the same captain or operations role; this is safer than silently reassigning.
+Boat status rules
+AVAILABLE: can be assigned. ASSIGNED: reserved for a claimed request. IN_TRANSIT: currently transporting a patient. MAINTENANCE: cannot be assigned.
+When a request is completed, the assigned boat returns to AVAILABLE unless the captain explicitly flags it for MAINTENANCE during completion/handoff.
+10. Edge Cases & Concurrency
+Edge case
+Expected behavior
+Two captains claim simultaneously
+Backend uses a conditional update/transaction: UPDATE request WHERE id=? AND status=OPEN. Exactly one request changes to CLAIMED; the other receives a conflict response.
+Two captains try to use the last available boat
+Boat assignment must also be atomic. One captain wins the boat reservation; the other sees “No available boat” and returns to the queue.
+Captain closes browser after claiming
+Request remains CLAIMED. The open queue does not duplicate the job. An optional timeout/release mechanism can be added later.
+Weak or lost network during submit
+Disable duplicate submission while pending; retry safely using a client-generated request UUID/idempotency key.
+Boat has 0% fuel
+Allow the record, but mark boat as “Not dispatch-ready” and block assignment if the product rule requires minimum fuel.
+Oxygen count becomes 0
+Allow the handoff record but surface a strong warning. MVP may block dispatch for critical cases based on configurable safety policy.
+Stale handoff
+Show “Handoff stale” badge with timestamp; do not hide the boat.
+Incorrect request created
+Permit dispatcher/operations to cancel with reason. Preserve audit event.
+Refresh while a job is being claimed
+Server is source of truth; client re-fetches authoritative status after mutation.
+History has many records
+Use pagination or cursor-based loading; default to recent records only.
+Five boats unavailable
+Board should still load, clearly showing zero available boats and all reasons.
+Different shifts use same device
+Do not depend on persistent personal login; require an easy display-name selector before actions or use a temporary session name.
+11. Real-Time Strategy
+MVP recommendation: use lightweight polling (for example every 5-10 seconds while the board is open) rather than a third-party real-time service. Polling is simpler, free, and more resilient for a prototype. Mutations should trigger an immediate re-fetch, so dispatch actions feel real-time without requiring sockets.
+Future option: replace polling with WebSockets/SSE once the core workflow is stable and real operational scale justifies it.
+12. Low-Bandwidth & Mobile Requirements
+Responsive mobile-first layout; design primarily for 360-430 px wide screens.
+No background video, large images, map tiles, or unnecessary animation.
+Prefer system fonts and inline SVG/iconography over heavy icon libraries.
+Keep the initial bundle small; lazy-load history/detail views where practical.
+Use compact JSON payloads and fetch only the fields needed for board cards.
+Use skeleton/loading states but keep the screen useful while data loads.
+Provide explicit offline/error banners rather than silently showing stale information.
+Primary CTAs must be thumb-friendly and at least roughly 44 px touch height.
+Use high-contrast status chips that do not rely on color alone; include text labels.
+13. Simplified UX Specification
+Operations Board card layout
+Header: Boat name + status badge. Middle: fuel percentage bar + oxygen tank count. Footer: latest handoff time + current job/request ID if assigned. Primary action: View / Handoff.
+Open Request card layout
+Urgency badge | Island/location | patient condition | age | short note | Claim button. Critical requests should remain visually dominant without using excessive animation.
+New Request interaction
+Use segmented controls/buttons for urgency and patient condition instead of dropdowns where screen space allows. Keep typing limited to pickup details and optional notes.
+14. API / Backend Contract (Prototype)
+Method
+Endpoint
+Purpose
+GET
+/api/boats
+Return current status for all five boats.
+GET
+/api/requests?status=open
+Return open requests sorted by urgency/age.
+POST
+/api/requests
+Create emergency request.
+POST
+/api/requests/:id/claim
+Atomically claim request and assign a boat.
+POST
+/api/requests/:id/in-transit
+Move claimed request to in-transit.
+POST
+/api/requests/:id/complete
+Complete request and free boat.
+POST
+/api/requests/:id/cancel
+Cancel request with reason.
+POST
+/api/boats/:id/handoffs
+Create handoff record and update boat snapshot.
+GET
+/api/history?island=...
+Filtered dispatch history.
+Important: The claim endpoint must enforce concurrency at the server/database layer. Do not trust a client-side “available” flag.
+15. Technology Recommendation for Antigravity
+Choose the simplest free stack that Antigravity can scaffold and deploy quickly. A practical default is: React + Vite for the frontend, a small Node/Express API, and a free hosted PostgreSQL-compatible database or lightweight hosted backend. Use standard REST endpoints and polling for live updates. Avoid external paid APIs and avoid unnecessary infrastructure.
+For the challenge prototype, a single repository and a single deployment target are preferred. Seed five boats and several demo islands/requests so the reviewer can immediately understand the workflow.
+16. Acceptance Criteria / Definition of Done
+A health worker can create an emergency request on a phone without login friction.
+A captain can open the request queue, claim a request, mark it in transit, and complete it.
+Exactly one captain can claim a request even when two clients submit the claim at nearly the same time.
+The operations board shows all five boats and, for each, availability, fuel %, oxygen count, and latest handoff time.
+A new handoff immediately updates the boat snapshot and preserves the prior handoff record.
+Past dispatches can be filtered by island location.
+The interface provides clear loading, empty, offline/error, and conflict states.
+The app works on mobile widths and remains readable/usable on slow connections.
+The app is deployed at a public free URL with no paid dependency.
+The repository contains a README with setup steps, environment variables, seed instructions, and deployment notes.
+17. Demo Data Requirements
+Item
+Example values
+Boats
+Boat 1, Boat 2, Boat 3, Boat 4, Boat 5
+Islands
+Island A, Island B, Island C, Island D
+Urgency
+Critical, High, Routine
+Conditions
+Critical, Serious, Stable, Unknown
+Captain display names
+Captain Ravi, Captain Suresh, Captain Anil (demo only)
+Seed data should include at least one open Critical request, one Claimed request, one In Transit request, one Completed request, and boats with different fuel/oxygen levels so the board demonstrates all major states.
+18. Trade-Offs to Document in Submission
+Polling instead of WebSockets: simpler, cheaper, and sufficient for the scale of five boats, at the cost of a few seconds of update latency.
+Lightweight role selection instead of authentication: dramatically reduces friction, but is not sufficient for production-grade accountability. Production should add authenticated identities and permissions.
+No GPS map: keeps the app fast and free; pickup is represented as an island/location field in the MVP.
+Append-only handoffs: improves auditability while keeping the current boat snapshot fast to read.
+Backend-enforced claim locking: slightly more implementation work, but necessary to prevent duplicate dispatch under concurrency.
+Five fixed boats in MVP: matches the challenge and simplifies the board; production can support dynamic fleet configuration later.
+19. Future Improvements
+Authenticated users with role-based access and stronger audit identity.
+Offline-first PWA with queued actions and safe idempotency when connectivity returns.
+SMS/push notifications using an approved free/operational messaging strategy.
+GPS tracking and estimated arrival time if hardware/connectivity becomes available.
+Fuel consumption analytics, oxygen consumption trends, and maintenance alerts.
+Automatic shift templates and supervisor sign-off.
+Configurable safety rules such as minimum fuel/O2 thresholds by patient condition.
+Analytics: response time, claim time, transport duration, cancellation reasons, and boat utilization.
+20. Antigravity Build Prompt
+Use this section as the direct implementation brief.Build the “River Ambulance Dispatch & Handoff Board” as a polished mobile-first web app from this PRD. Prioritize the fastest possible emergency workflow and make the Operations Board the home screen. Seed exactly five boats. Implement the request lifecycle OPEN -> CLAIMED -> IN_TRANSIT -> COMPLETED and OPEN -> CANCELLED. Make claim concurrency safe at the backend/database layer so exactly one captain can claim a job. Provide the New Request form, Open Requests queue, Request Detail, Boat Detail/Handoff, Operations Board, and Dispatch History filtered by island. Track fuel percentage, oxygen tank count, boat availability, latest handoff time, and append-only handoff history. Use polling for lightweight real-time updates. Avoid paid APIs/services, maps, heavy images, and complex login. Include loading, empty, error, offline, conflict, and no-available-boat states. Make mobile controls touch-friendly and optimize the initial bundle for low-bandwidth connections. Provide a README, seeded demo data, and deployment configuration for a free public URL. Before finishing, test the double-claim race condition, refresh consistency, mobile layout, and all major state transitions.
+21. Submission Note Template
+Use the following concise structure in the final challenge submission:
+Section
+Content to include
+Live URL
+<public deployed URL>
+Repository
+<public Git repository URL>
+Trade-offs
+Polling over sockets; lightweight role selection over full auth; no GPS/media to protect speed; backend transaction for claim safety.
+Edge cases
+Double claim, last available boat, lost connectivity, stale handoff, zero fuel/O2, refresh while claiming, cancellation.
+Future improvements
+Authenticated users, PWA/offline queue, notifications, GPS/ETA, analytics, configurable safety thresholds.
